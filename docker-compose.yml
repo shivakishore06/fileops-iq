@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: fileops-iq-postgres
+    environment:
+      POSTGRES_USER: fileops_user
+      POSTGRES_PASSWORD: fileops_password
+      POSTGRES_DB: fileops_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fileops_user -d fileops_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fileops-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  redis:
+    image: redis:7-alpine
+    container_name: fileops-iq-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fileops-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  minio:
+    image: minio/minio:latest
+    container_name: fileops-iq-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio_admin
+      MINIO_ROOT_PASSWORD: minio_password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - minio_data:/data
+    networks:
+      - fileops-network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fileops-iq-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - DATABASE_URL=postgresql://fileops_user:fileops_password@postgres:5432/fileops_db?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=change-me-in-production-use-openssl-rand-hex-32
+      - JWT_REFRESH_SECRET=change-me-in-production-use-openssl-rand-hex-32
+      - ENCRYPTION_KEY=32bytekeyforaesencryptionhere!!!
+      - APP_PORT=3001
+      - NODE_ENV=production
+      - CORS_ORIGINS=http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - fileops-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fileops-iq-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    depends_on:
+      - backend
+    networks:
+      - fileops-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+
+networks:
+  fileops-network:
+    driver: bridge

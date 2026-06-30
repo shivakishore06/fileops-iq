@@ -1,0 +1,452 @@
+// datasource config
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// 1. Core Multi-Tenancy & Auth
+// ==========================================
+
+model Tenant {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  domain      String    @unique
+  status      String    @default("ACTIVE") // ACTIVE, SUSPENDED
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdBy   String?   @map("created_by")
+  updatedBy   String?   @map("updated_by")
+  deletedAt   DateTime? @map("deleted_at")
+  version     Int       @default(1)
+
+  users             User[]
+  partners          Partner[]
+  connections       Connection[]
+  files             File[]
+  fileEvents        FileEvent[]
+  fileLifecycles    FileLifecycle[]
+  slaPolicies       SlaPolicy[]
+  alerts            Alert[]
+  alertRules        AlertRule[]
+  auditTrails       AuditTrail[]
+  retentionPolicies RetentionPolicy[]
+  storagePolicies   StoragePolicy[]
+  featureFlags      FeatureFlag[]
+  aiSettings        AiSetting[]
+
+  @@map("tenants")
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  firstName    String    @map("first_name")
+  lastName     String    @map("last_name")
+  status       String    @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED
+  mfaEnabled   Boolean   @default(false) @map("mfa_enabled")
+  mfaSecret    String?   @map("mfa_secret")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  createdBy    String?   @map("created_by")
+  updatedBy    String?   @map("updated_by")
+  deletedAt    DateTime? @map("deleted_at")
+  version      Int       @default(1)
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userRoles    UserRole[]
+  auditTrails  AuditTrail[]
+
+  @@map("users")
+  @@index([tenantId])
+}
+
+model Role {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @unique // ADMIN, OPERATOR, VIEWER, PARTNER
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String    @id @default(uuid()) @db.Uuid
+  action      String    @unique // e.g. "connection:create", "file:read", "sla:write"
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+// ==========================================
+// 2. Organization & Partners
+// ==========================================
+
+model Partner {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  name        String
+  code        String    @unique // Unique shortcode (e.g. PARTNER_A)
+  status      String    @default("ACTIVE")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdBy   String?   @map("created_by")
+  updatedBy   String?   @map("updated_by")
+  deletedAt   DateTime? @map("deleted_at")
+  version     Int       @default(1)
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  connections Connection[]
+  files       File[]
+  slaPolicies SlaPolicy[]
+
+  @@map("partners")
+  @@index([tenantId])
+}
+
+// ==========================================
+// 3. Connection Manager
+// ==========================================
+
+model Connection {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  partnerId       String?   @map("partner_id") @db.Uuid
+  name            String
+  type            String    // SFTP, FTP, FTPS, S3, AZURE, SHAREPOINT, FOLDER, API
+  status          String    @default("INACTIVE") // ACTIVE, INACTIVE, ERROR
+  host            String?
+  port            Int?
+  username        String?
+  passwordEnc     String?   @map("password_enc") // Encrypted password
+  privateKeyEnc   String?   @map("private_key_enc") // Encrypted SSH Private Key
+  configJson      String?   @map("config_json") // Other credentials / options (bucket, folder path, region, credentials etc.)
+  pollingInterval Int       @default(300) @map("polling_interval") // in seconds
+  timeout         Int       @default(30) // in seconds
+  retryLimit      Int       @default(3) @map("retry_limit")
+  encryptionType  String?   @map("encryption_type") // PGP, AES, NONE
+  proxySettings   String?   @map("proxy_settings")
+  lastCheckedAt   DateTime? @map("last_checked_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  createdBy       String?   @map("created_by")
+  updatedBy       String?   @map("updated_by")
+  deletedAt       DateTime? @map("deleted_at")
+  version         Int       @default(1)
+
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partner    Partner?  @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  files      File[]
+
+  @@map("connections")
+  @@index([tenantId])
+  @@index([partnerId])
+}
+
+// ==========================================
+// 4. File Monitoring & Metadata
+// ==========================================
+
+model File {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  partnerId       String?   @map("partner_id") @db.Uuid
+  connectionId    String?   @map("connection_id") @db.Uuid
+  filename        String
+  path            String
+  fileSize        BigInt    @map("file_size")
+  checksum        String?   // SHA-256 Checksum
+  extension       String?
+  mimeType        String?   @map("mime_type")
+  encoding        String?   @default("UTF-8")
+  compression     String?   // GZIP, ZIP, NONE
+  status          String    @default("DETECTED") // DETECTED, TRANSFERRED, VALIDATED, PARSED, PROCESSED, ARCHIVED, ERROR, DELETED
+  receivedAt      DateTime  @default(now()) @map("received_at")
+  lastModified    DateTime? @map("last_modified")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  createdBy       String?   @map("created_by")
+  updatedBy       String?   @map("updated_by")
+  deletedAt       DateTime? @map("deleted_at")
+  version         Int       @default(1)
+
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partner    Partner?        @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  connection Connection?     @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  events     FileEvent[]
+  lifecycles FileLifecycle[]
+
+  @@map("files")
+  @@index([tenantId])
+  @@index([partnerId])
+  @@index([connectionId])
+  @@index([checksum])
+  @@index([createdAt])
+}
+
+model FileEvent {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  fileId       String    @map("file_id") @db.Uuid
+  eventType    String    @map("event_type") // NEW, MODIFIED, DELETED, MOVED, RENAMED, DOWNLOADED, COPIED, ARCHIVED
+  description  String?
+  timestamp    DateTime  @default(now())
+  userId       String?   @map("user_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  createdBy    String?   @map("created_by")
+  updatedBy    String?   @map("updated_by")
+  deletedAt    DateTime? @map("deleted_at")
+  version      Int       @default(1)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  file   File   @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@map("file_events")
+  @@index([tenantId])
+  @@index([fileId])
+}
+
+model FileLifecycle {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  fileId       String    @map("file_id") @db.Uuid
+  stage        String    // DETECTED, TRANSFERRED, VALIDATED, PARSED, PROCESSED, ARCHIVED, DELETED
+  status       String    // PENDING, SUCCESS, FAILED
+  timestamp    DateTime  @default(now())
+  durationMs   Int?      @map("duration_ms")
+  errorMessage String?   @map("error_message")
+  userId       String?   @map("user_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  createdBy    String?   @map("created_by")
+  updatedBy    String?   @map("updated_by")
+  deletedAt    DateTime? @map("deleted_at")
+  version      Int       @default(1)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  file   File   @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@map("file_lifecycles")
+  @@index([tenantId])
+  @@index([fileId])
+}
+
+// ==========================================
+// 5. SLA & Alerting
+// ==========================================
+
+model SlaPolicy {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  partnerId      String?   @map("partner_id") @db.Uuid
+  name           String
+  filenamePattern String    @map("filename_pattern") // Glob or Regex
+  expectedTime   String    @map("expected_time") // HH:MM
+  toleranceMin   Int       @default(15) @map("tolerance_min")
+  alertMarginMin Int       @default(5) @map("alert_margin_min")
+  frequency      String    @default("DAILY") // DAILY, WEEKLY, MONTHLY
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  createdBy      String?   @map("created_by")
+  updatedBy      String?   @map("updated_by")
+  deletedAt      DateTime? @map("deleted_at")
+  version        Int       @default(1)
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partner Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+
+  @@map("sla_policies")
+  @@index([tenantId])
+}
+
+model AlertRule {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  name       String
+  condition  String    // MISSING_FILE, LATE_FILE, DUPLICATE_FILE, CONNECTION_FAILURE, VALIDATION_FAILURE, FILE_SIZE_THRESHOLD
+  threshold  BigInt?   // Configurable value e.g. Max/Min File Size
+  severity   String    @default("WARNING") // INFO, WARNING, CRITICAL
+  channels   String[]  // EMAIL, SMS, SLACK, TEAMS, WEBHOOK
+  channelCfg String?   @map("channel_cfg") // Webhook URL or Email list
+  isActive   Boolean   @default(true) @map("is_active")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  createdBy  String?   @map("created_by")
+  updatedBy  String?   @map("updated_by")
+  deletedAt  DateTime? @map("deleted_at")
+  version    Int       @default(1)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("alert_rules")
+  @@index([tenantId])
+}
+
+model Alert {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  ruleId     String?   @map("rule_id") @db.Uuid
+  title      String
+  message    String
+  severity   String    @default("WARNING")
+  status     String    @default("ACTIVE") // ACTIVE, ACKNOWLEDGED, RESOLVED
+  triggeredAt DateTime  @default(now()) @map("triggered_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  createdBy  String?   @map("created_by")
+  updatedBy  String?   @map("updated_by")
+  deletedAt  DateTime? @map("deleted_at")
+  version    Int       @default(1)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+  @@index([tenantId])
+}
+
+// ==========================================
+// 6. Security, Policy & Config
+// ==========================================
+
+model AuditTrail {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  userId     String?   @map("user_id") @db.Uuid
+  action     String    // LOGIN, UPLOAD, DELETE, DOWNLOAD, RETENTION_TRIGGER, etc.
+  details    String?   // JSON detailed audit trail payload
+  ipAddress  String?   @map("ip_address")
+  userAgent  String?   @map("user_agent")
+  timestamp  DateTime  @default(now())
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  createdBy  String?   @map("created_by")
+  updatedBy  String?   @map("updated_by")
+  deletedAt  DateTime? @map("deleted_at")
+  version    Int       @default(1)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_trails")
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model RetentionPolicy {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  name       String
+  pattern    String    // Filename pattern or path
+  ageDays    Int       @map("age_days") // Purge older than
+  action     String    // DELETE, ARCHIVE
+  isActive   Boolean   @default(true) @map("is_active")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  createdBy  String?   @map("created_by")
+  updatedBy  String?   @map("updated_by")
+  deletedAt  DateTime? @map("deleted_at")
+  version    Int       @default(1)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("retention_policies")
+  @@index([tenantId])
+}
+
+model StoragePolicy {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  name       String
+  provider   String    // MINIO, AWS_S3, AZURE_BLOB
+  bucketName String    @map("bucket_name")
+  region     String?
+  isActive   Boolean   @default(true) @map("is_active")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  createdBy  String?   @map("created_by")
+  updatedBy  String?   @map("updated_by")
+  deletedAt  DateTime? @map("deleted_at")
+  version    Int       @default(1)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("storage_policies")
+  @@index([tenantId])
+}
+
+model FeatureFlag {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  key         String    @unique
+  value       Boolean   @default(false)
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdBy   String?   @map("created_by")
+  updatedBy   String?   @map("updated_by")
+  deletedAt   DateTime? @map("deleted_at")
+  version     Int       @default(1)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("feature_flags")
+  @@index([tenantId])
+}
+
+model AiSetting {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  provider   String    // OPENAI, ANTHROPIC, GEMINI, OLLAMA
+  apiKeyEnc  String?   @map("api_key_enc")
+  modelName  String    @map("model_name")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  createdBy  String?   @map("created_by")
+  updatedBy  String?   @map("updated_by")
+  deletedAt  DateTime? @map("deleted_at")
+  version    Int       @default(1)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("ai_settings")
+  @@index([tenantId])
+}

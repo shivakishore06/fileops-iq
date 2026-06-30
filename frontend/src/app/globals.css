@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans), sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
+}
+
+:root {
+  --background: 240 10% 98%;
+  --foreground: 224 71.4% 4.1%;
+  
+  --card: 0 0% 100%;
+  --card-foreground: 224 71.4% 4.1%;
+  
+  --popover: 0 0% 100%;
+  --popover-foreground: 224 71.4% 4.1%;
+  
+  --primary: 244.5 74.3% 58.6%;
+  --primary-foreground: 210 20% 98%;
+  
+  --secondary: 220 14.3% 95.9%;
+  --secondary-foreground: 220.9 39.3% 11%;
+  
+  --muted: 220 14.3% 95.9%;
+  --muted-foreground: 220 8.9% 46.1%;
+  
+  --accent: 220 14.3% 95.9%;
+  --accent-foreground: 220.9 39.3% 11%;
+  
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 20% 98%;
+  
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 244.5 74.3% 58.6%;
+  --radius: 0.75rem;
+
+  --status-success: 142.1 76.2% 36.3%;
+  --status-warning: 38 92% 50%;
+  --status-error: 0 84.2% 60.2%;
+}
+
+.dark {
+  --background: 222 47% 4%;
+  --foreground: 210 40% 98%;
+  
+  --card: 222 47% 6%;
+  --card-foreground: 210 40% 98%;
+  
+  --popover: 222 47% 6%;
+  --popover-foreground: 210 40% 98%;
+  
+  --primary: 244.5 74.3% 58.6%;
+  --primary-foreground: 210 20% 98%;
+  
+  --secondary: 217.2 32.6% 12%;
+  --secondary-foreground: 210 40% 98%;
+  
+  --muted: 217.2 32.6% 12%;
+  --muted-foreground: 215 20.2% 65.1%;
+  
+  --accent: 217.2 32.6% 12%;
+  --accent-foreground: 210 40% 98%;
+  
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 40% 98%;
+  
+  --border: 217.2 32.6% 15%;
+  --input: 217.2 32.6% 15%;
+  --ring: 244.5 74.3% 58.6%;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+
+/* Dynamic Glassmorphism utilities */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-panel-light {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
