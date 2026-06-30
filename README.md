@@ -1,6 +1,6 @@
 # FileOps IQ — Enterprise File Operations & Analytics Platform
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: Source--Available](https://img.shields.io/badge/License-Source--Available-orange.svg)](./LICENSE)
 [![NodeJS](https://img.shields.io/badge/Node.js-v18+-green.svg)](https://nodejs.org/)
 [![NestJS](https://img.shields.io/badge/NestJS-v11-red.svg)](https://nestjs.com/)
 [![NextJS](https://img.shields.io/badge/Next.js-v16-black.svg)](https://nextjs.org/)
@@ -127,4 +127,4 @@ Credentials (passwords, SSH private keys) are encrypted using AES-256-GCM.
 ---
 
 ## 📜 License
-Distributed under the MIT License. See `LICENSE` for details.
+Distributed under a Custom Source-Available / Non-Commercial License. Siva Kishore retains all copyright ownership. Resale and commercial distribution are strictly prohibited. See `LICENSE` for details.
